@@ -310,13 +310,28 @@ function create() {
     // Create guide lines
     createGuideLines(this);
 
-    // Display character with pixelated font style
-    characterText = this.add.text(400, 300, '', {
-        fontSize: '160px',
+    // Create reference box in bottom right
+    const referenceBox = this.add.rectangle(680, 480, 200, 160, 0xffffff, 0.95);
+    referenceBox.setStrokeStyle(3, 0x000000);
+
+    // Add "Reference" label
+    const referenceLabel = this.add.text(680, 400, 'REFERENCE', {
+        fontSize: '14px',
         fontFamily: 'monospace',
-        color: '#cccccc',
+        color: '#666666',
+        backgroundColor: '#ffffff',
+        padding: { x: 5, y: 2 },
+        align: 'center'
+    });
+    referenceLabel.setOrigin(0.5);
+
+    // Display character in reference box
+    characterText = this.add.text(680, 480, '', {
+        fontSize: '80px',
+        fontFamily: 'monospace',
+        color: '#333333',
         align: 'center',
-        padding: { x: 10, y: 10 }
+        padding: { x: 5, y: 5 }
     });
     characterText.setOrigin(0.5);
 
@@ -332,8 +347,8 @@ function create() {
     congratsImage.setDepth(100);
 
     // Guide text with 8-bit style
-    guideText = this.add.text(400, 80, 'Draw the character!', {
-        fontSize: '20px',
+    guideText = this.add.text(400, 80, 'Follow the stroke guides! Start at red dots, follow yellow lines!', {
+        fontSize: '18px',
         fontFamily: 'monospace',
         color: '#000000',
         backgroundColor: '#ffff00',
@@ -463,7 +478,11 @@ function stopDrawing() {
 
             // Update guide text
             if (currentCharacter && currentStroke < currentCharacter.strokeCount) {
-                guideText.setText(`Stroke ${currentStroke + 1} of ${currentCharacter.strokeCount}`);
+                guideText.setText(`Stroke ${currentStroke + 1} of ${currentCharacter.strokeCount} - Follow the yellow guide!`);
+                guideText.setStyle({
+                    backgroundColor: '#667eea',
+                    color: '#ffffff'
+                });
                 drawStrokeGuide();
             } else {
                 checkDrawing();
@@ -484,7 +503,11 @@ function clearDrawing() {
     strokeGuideGraphics.clear();
 
     if (currentCharacter) {
-        guideText.setText(`Stroke 1 of ${currentCharacter.strokeCount}`);
+        guideText.setText(`Stroke 1 of ${currentCharacter.strokeCount} - Follow the yellow guide!`);
+        guideText.setStyle({
+            backgroundColor: '#667eea',
+            color: '#ffffff'
+        });
         drawStrokeGuide();
     }
 }
@@ -503,56 +526,265 @@ function nextCharacter() {
     document.getElementById('romanization').textContent = currentCharacter.romanization;
 
     // Reset guide text
-    guideText.setText(`Stroke 1 of ${currentCharacter.strokeCount}`);
-    guideText.setColor('#667eea');
+    guideText.setText(`Stroke 1 of ${currentCharacter.strokeCount} - Follow the yellow guide!`);
+    guideText.setStyle({
+        backgroundColor: '#667eea',
+        color: '#ffffff'
+    });
 }
 
 function checkDrawing() {
     // Check if all strokes are completed
     if (currentStroke === currentCharacter.strokeCount) {
-        // Success! Redraw all strokes in green
-        graphics.clear();
-        graphics.lineStyle(8, 0x4ecdc4, 1);
+        // Validate each stroke against the expected pattern
+        let allStrokesValid = true;
+        let feedback = [];
 
-        for (let stroke of allStrokes) {
-            if (stroke.length > 0) {
-                graphics.beginPath();
-                graphics.moveTo(stroke[0].x, stroke[0].y);
+        for (let i = 0; i < allStrokes.length; i++) {
+            const drawnStroke = allStrokes[i];
+            const expectedStroke = currentCharacter.strokes[i];
+            const isValid = validateStroke(drawnStroke, expectedStroke);
 
-                for (let i = 1; i < stroke.length; i++) {
-                    graphics.lineTo(stroke[i].x, stroke[i].y);
-                }
 
-                graphics.strokePath();
+
+            if (!isValid) {
+                allStrokesValid = false;
+                feedback.push(`Stroke ${i + 1} doesn't match the expected pattern`);
             }
         }
 
-        // Update score
-        score += 10 * currentCharacter.strokeCount;
-        document.getElementById('score').textContent = score;
+        if (allStrokesValid) {
+            // Success! Redraw all strokes in green
+            graphics.clear();
+            graphics.lineStyle(8, 0x4ecdc4, 1);
 
-        // Level up every 100 points
-        if (score > 0 && score % 100 === 0) {
-            level++;
-            document.getElementById('level').textContent = level;
+            for (let stroke of allStrokes) {
+                if (stroke.length > 0) {
+                    graphics.beginPath();
+                    graphics.moveTo(stroke[0].x, stroke[0].y);
+
+                    for (let i = 1; i < stroke.length; i++) {
+                        graphics.lineTo(stroke[i].x, stroke[i].y);
+                    }
+
+                    graphics.strokePath();
+                }
+            }
+
+            // Update score
+            score += 10 * currentCharacter.strokeCount;
+            document.getElementById('score').textContent = score;
+
+            // Level up every 100 points
+            if (score > 0 && score % 100 === 0) {
+                level++;
+                document.getElementById('level').textContent = level;
+            }
+
+            // Show success message
+            guideText.setText('Perfect! All strokes completed!');
+            guideText.setStyle({
+                backgroundColor: '#00ff00',
+                color: '#000000'
+            });
+            strokeGuideGraphics.clear();
+
+            // Play success sound
+            if (!isMuted) {
+                successSound.play();
+            }
+
+            // Show congratulations animation
+            showCongratulations();
+        } else {
+            // Some strokes don't match - show feedback
+            graphics.clear();
+            graphics.lineStyle(8, 0xff6b6b, 1); // Red color for incorrect strokes
+
+            for (let stroke of allStrokes) {
+                if (stroke.length > 0) {
+                    graphics.beginPath();
+                    graphics.moveTo(stroke[0].x, stroke[0].y);
+
+                    for (let i = 1; i < stroke.length; i++) {
+                        graphics.lineTo(stroke[i].x, stroke[i].y);
+                    }
+
+                    graphics.strokePath();
+                }
+            }
+
+            // Show feedback
+            guideText.setText('Not quite right. Try again!');
+            guideText.setStyle({
+                backgroundColor: '#ff6b6b',
+                color: '#ffffff'
+            });
+
+            // Auto-clear after 2 seconds to try again
+            setTimeout(() => {
+                clearDrawing();
+            }, 2000);
         }
-
-        // Show success message
-        guideText.setText('Perfect! All strokes completed!');
-        guideText.setStyle({
-            backgroundColor: '#00ff00',
-            color: '#000000'
-        });
-        strokeGuideGraphics.clear();
-
-        // Play success sound
-        if (!isMuted) {
-            successSound.play();
-        }
-
-        // Show congratulations animation
-        showCongratulations();
     }
+}
+
+function validateStroke(drawnStroke, expectedStroke) {
+    if (!drawnStroke || drawnStroke.length < 3) {
+        return false; // Too short to be a valid stroke
+    }
+
+    if (expectedStroke.type === 'line') {
+        return validateLineStroke(drawnStroke, expectedStroke);
+    } else if (expectedStroke.type === 'circle') {
+        return validateCircleStroke(drawnStroke, expectedStroke);
+    }
+
+    return false;
+}
+
+function validateLineStroke(drawnStroke, expectedStroke) {
+    const tolerance = 200; // Very forgiving pixel tolerance
+    const expectedPoints = expectedStroke.points;
+
+    // Check if start point is close to expected start
+    const startPoint = drawnStroke[0];
+    const expectedStart = expectedPoints[0];
+    if (distance(startPoint, { x: expectedStart[0], y: expectedStart[1] }) > tolerance) {
+        return false;
+    }
+
+    // Check if end point is close to expected end
+    const endPoint = drawnStroke[drawnStroke.length - 1];
+    const expectedEnd = expectedPoints[expectedPoints.length - 1];
+    if (distance(endPoint, { x: expectedEnd[0], y: expectedEnd[1] }) > tolerance) {
+        return false;
+    }
+
+    // For simple lines (2 points), check if the drawn path is roughly straight
+    if (expectedPoints.length === 2) {
+        return validateStraightLine(drawnStroke, expectedPoints[0], expectedPoints[1], tolerance);
+    }
+
+    // For complex paths, check if drawn points follow the expected path
+    return validateComplexPath(drawnStroke, expectedPoints, tolerance);
+}
+
+function validateCircleStroke(drawnStroke, expectedStroke) {
+    const tolerance = 150; // Very forgiving pixel tolerance for circle matching
+    const expectedCenter = expectedStroke.center;
+    const expectedRadius = expectedStroke.radius;
+
+    // Check if the drawn stroke forms a roughly circular shape
+    let validPointsCount = 0;
+    const totalPoints = drawnStroke.length;
+
+    for (let point of drawnStroke) {
+        const distFromCenter = distance(point, { x: expectedCenter[0], y: expectedCenter[1] });
+
+        // Check if point is within tolerance of the expected circle
+        if (Math.abs(distFromCenter - expectedRadius) <= tolerance) {
+            validPointsCount++;
+        }
+    }
+
+    // Only need 30% of points to be close to the expected circle
+    return (validPointsCount / totalPoints) >= 0.3;
+}
+
+function validateStraightLine(drawnStroke, startPoint, endPoint, tolerance) {
+    // Check if most points in the drawn stroke are close to the expected line
+    let validPointsCount = 0;
+    const totalPoints = drawnStroke.length;
+
+    for (let point of drawnStroke) {
+        const distToLine = pointToLineDistance(
+            point,
+            { x: startPoint[0], y: startPoint[1] },
+            { x: endPoint[0], y: endPoint[1] }
+        );
+
+        if (distToLine <= tolerance) {
+            validPointsCount++;
+        }
+    }
+
+    // Only need 40% of points to be close to the expected line
+    return (validPointsCount / totalPoints) >= 0.4;
+}
+
+function validateComplexPath(drawnStroke, expectedPoints, tolerance) {
+    // For complex paths with multiple segments, check if drawn stroke follows the general direction
+    const sampledPoints = samplePoints(drawnStroke, expectedPoints.length);
+    let validSegments = 0;
+
+    for (let i = 0; i < expectedPoints.length; i++) {
+        if (i < sampledPoints.length) {
+            const dist = distance(sampledPoints[i], { x: expectedPoints[i][0], y: expectedPoints[i][1] });
+            if (dist <= tolerance) {
+                validSegments++;
+            }
+        }
+    }
+
+    // Only need 30% of key points to match
+    return (validSegments / expectedPoints.length) >= 0.3;
+}
+
+function samplePoints(drawnStroke, numSamples) {
+    if (drawnStroke.length <= numSamples) {
+        return drawnStroke;
+    }
+
+    const sampledPoints = [];
+    const interval = drawnStroke.length / numSamples;
+
+    for (let i = 0; i < numSamples; i++) {
+        const index = Math.floor(i * interval);
+        sampledPoints.push(drawnStroke[index]);
+    }
+
+    return sampledPoints;
+}
+
+function distance(point1, point2) {
+    const dx = point1.x - point2.x;
+    const dy = point1.y - point2.y;
+    return Math.sqrt(dx * dx + dy * dy);
+}
+
+function pointToLineDistance(point, lineStart, lineEnd) {
+    const A = point.x - lineStart.x;
+    const B = point.y - lineStart.y;
+    const C = lineEnd.x - lineStart.x;
+    const D = lineEnd.y - lineStart.y;
+
+    const dot = A * C + B * D;
+    const lenSq = C * C + D * D;
+
+    if (lenSq === 0) {
+        return distance(point, lineStart);
+    }
+
+    let param = dot / lenSq;
+
+    let xx, yy;
+
+    if (param < 0) {
+        xx = lineStart.x;
+        yy = lineStart.y;
+    } else if (param > 1) {
+        xx = lineEnd.x;
+        yy = lineEnd.y;
+    } else {
+        xx = lineStart.x + param * C;
+        yy = lineStart.y + param * D;
+    }
+
+    const dx = point.x - xx;
+    const dy = point.y - yy;
+
+    return Math.sqrt(dx * dx + dy * dy);
 }
 
 function drawStrokeGuide() {
@@ -578,7 +810,7 @@ function drawStrokeGuide() {
 
     // Draw current stroke guide in yellow
     const currentStrokeData = currentCharacter.strokes[currentStroke];
-    strokeGuideGraphics.lineStyle(4, 0xffd93d, 0.8);
+    strokeGuideGraphics.lineStyle(6, 0xffd93d, 1.0);
 
     if (currentStrokeData.type === 'line') {
         // Draw stroke path
@@ -591,7 +823,7 @@ function drawStrokeGuide() {
 
         // Draw start point indicator
         strokeGuideGraphics.fillStyle(0xff0000, 1);
-        strokeGuideGraphics.fillCircle(currentStrokeData.points[0][0], currentStrokeData.points[0][1], 8);
+        strokeGuideGraphics.fillCircle(currentStrokeData.points[0][0], currentStrokeData.points[0][1], 12);
 
         // Draw arrow at end
         const lastIdx = currentStrokeData.points.length - 1;
@@ -612,7 +844,7 @@ function drawStrokeGuide() {
 
         // Draw start point at top of circle
         strokeGuideGraphics.fillStyle(0xff0000, 1);
-        strokeGuideGraphics.fillCircle(currentStrokeData.center[0], currentStrokeData.center[1] - currentStrokeData.radius, 8);
+        strokeGuideGraphics.fillCircle(currentStrokeData.center[0], currentStrokeData.center[1] - currentStrokeData.radius, 12);
     }
 }
 
