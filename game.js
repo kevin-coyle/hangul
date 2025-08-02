@@ -271,12 +271,14 @@ let characterText;
 let guideText;
 let hintGraphics;
 let strokeGuideGraphics;
+let referenceGuideGraphics;
 let showingHint = false;
 let congratsImage;
 let backgroundImage;
 let bgMusic0;
 let bgMusic1;
 let bgMusic2;
+let bgMusic3;
 let successSound;
 let currentBgMusic = 0;
 let isMuted = false;
@@ -295,6 +297,7 @@ function preload() {
     this.load.audio('bgMusic0', 'song0.mp3');
     this.load.audio('bgMusic1', 'song1.mp3');
     this.load.audio('bgMusic2', 'song2.mp3');
+    this.load.audio('bgMusic3', 'song3.mp3');
     this.load.audio('success', 'success.mp3');
 }
 
@@ -315,8 +318,8 @@ function create() {
     referenceBox.setStrokeStyle(3, 0x000000);
 
     // Add "Reference" label
-    const referenceLabel = this.add.text(680, 400, 'REFERENCE', {
-        fontSize: '14px',
+    const referenceLabel = this.add.text(680, 400, 'REFERENCE & GUIDE', {
+        fontSize: '12px',
         fontFamily: 'monospace',
         color: '#666666',
         backgroundColor: '#ffffff',
@@ -325,15 +328,18 @@ function create() {
     });
     referenceLabel.setOrigin(0.5);
 
-    // Display character in reference box
-    characterText = this.add.text(680, 480, '', {
-        fontSize: '80px',
+    // Display character in reference box (smaller to make room for guides)
+    characterText = this.add.text(640, 440, '', {
+        fontSize: '50px',
         fontFamily: 'monospace',
         color: '#333333',
         align: 'center',
         padding: { x: 5, y: 5 }
     });
     characterText.setOrigin(0.5);
+
+    // Create separate graphics for reference box guides
+    referenceGuideGraphics = this.add.graphics();
 
     // Create graphics objects on top
     strokeGuideGraphics = this.add.graphics();
@@ -347,7 +353,7 @@ function create() {
     congratsImage.setDepth(100);
 
     // Guide text with 8-bit style
-    guideText = this.add.text(400, 80, 'Follow the stroke guides! Start at red dots, follow yellow lines!', {
+    guideText = this.add.text(400, 80, 'Draw freely on the canvas! Check the reference box for stroke guides!', {
         fontSize: '18px',
         fontFamily: 'monospace',
         color: '#000000',
@@ -366,15 +372,17 @@ function create() {
     bgMusic0 = this.sound.add('bgMusic0', { loop: false, volume: 0.3 });
     bgMusic1 = this.sound.add('bgMusic1', { loop: false, volume: 0.3 });
     bgMusic2 = this.sound.add('bgMusic2', { loop: false, volume: 0.3 });
+    bgMusic3 = this.sound.add('bgMusic3', { loop: false, volume: 0.3 });
     successSound = this.sound.add('success', { volume: 0.5 });
 
     // Store in array for easy cycling
-    bgMusicArray = [bgMusic0, bgMusic1, bgMusic2];
+    bgMusicArray = [bgMusic0, bgMusic1, bgMusic2, bgMusic3];
 
     // Set up auto-progression when songs end
     bgMusic0.on('complete', () => playNextSong());
     bgMusic1.on('complete', () => playNextSong());
     bgMusic2.on('complete', () => playNextSong());
+    bgMusic3.on('complete', () => playNextSong());
 
     // Don't start music yet - wait for start button
 
@@ -478,7 +486,7 @@ function stopDrawing() {
 
             // Update guide text
             if (currentCharacter && currentStroke < currentCharacter.strokeCount) {
-                guideText.setText(`Stroke ${currentStroke + 1} of ${currentCharacter.strokeCount} - Follow the yellow guide!`);
+                guideText.setText(`Stroke ${currentStroke + 1} of ${currentCharacter.strokeCount} - See guide in reference box!`);
                 guideText.setStyle({
                     backgroundColor: '#667eea',
                     color: '#ffffff'
@@ -500,10 +508,10 @@ function clearDrawing() {
     currentStroke = 0;
     showingHint = false;
     hintGraphics.clear();
-    strokeGuideGraphics.clear();
+    referenceGuideGraphics.clear();
 
     if (currentCharacter) {
-        guideText.setText(`Stroke 1 of ${currentCharacter.strokeCount} - Follow the yellow guide!`);
+        guideText.setText(`Stroke 1 of ${currentCharacter.strokeCount} - See guide in reference box!`);
         guideText.setStyle({
             backgroundColor: '#667eea',
             color: '#ffffff'
@@ -526,7 +534,7 @@ function nextCharacter() {
     document.getElementById('romanization').textContent = currentCharacter.romanization;
 
     // Reset guide text
-    guideText.setText(`Stroke 1 of ${currentCharacter.strokeCount} - Follow the yellow guide!`);
+    guideText.setText(`Stroke 1 of ${currentCharacter.strokeCount} - See guide in reference box!`);
     guideText.setStyle({
         backgroundColor: '#667eea',
         color: '#ffffff'
@@ -587,7 +595,7 @@ function checkDrawing() {
                 backgroundColor: '#00ff00',
                 color: '#000000'
             });
-            strokeGuideGraphics.clear();
+            referenceGuideGraphics.clear();
 
             // Play success sound
             if (!isMuted) {
@@ -790,61 +798,82 @@ function pointToLineDistance(point, lineStart, lineEnd) {
 function drawStrokeGuide() {
     if (!currentCharacter || currentStroke >= currentCharacter.strokeCount) return;
 
-    strokeGuideGraphics.clear();
+    referenceGuideGraphics.clear();
+
+    // Scale and offset for reference box
+    const scale = 0.25; // Scale down to fit in reference box
+    const offsetX = 720; // Right side of reference box
+    const offsetY = 480; // Center of reference box
+    const baseOffsetX = -300 * scale; // Center the scaled strokes
+    const baseOffsetY = -300 * scale;
 
     // Draw previous strokes in light gray
-    strokeGuideGraphics.lineStyle(4, 0xcccccc, 0.5);
+    referenceGuideGraphics.lineStyle(2, 0xcccccc, 0.5);
     for (let i = 0; i < currentStroke; i++) {
         const stroke = currentCharacter.strokes[i];
         if (stroke.type === 'line') {
-            strokeGuideGraphics.beginPath();
-            strokeGuideGraphics.moveTo(stroke.points[0][0], stroke.points[0][1]);
+            referenceGuideGraphics.beginPath();
+            const startX = offsetX + baseOffsetX + (stroke.points[0][0] * scale);
+            const startY = offsetY + baseOffsetY + (stroke.points[0][1] * scale);
+            referenceGuideGraphics.moveTo(startX, startY);
             for (let j = 1; j < stroke.points.length; j++) {
-                strokeGuideGraphics.lineTo(stroke.points[j][0], stroke.points[j][1]);
+                const x = offsetX + baseOffsetX + (stroke.points[j][0] * scale);
+                const y = offsetY + baseOffsetY + (stroke.points[j][1] * scale);
+                referenceGuideGraphics.lineTo(x, y);
             }
-            strokeGuideGraphics.strokePath();
+            referenceGuideGraphics.strokePath();
         } else if (stroke.type === 'circle') {
-            strokeGuideGraphics.strokeCircle(stroke.center[0], stroke.center[1], stroke.radius);
+            const centerX = offsetX + baseOffsetX + (stroke.center[0] * scale);
+            const centerY = offsetY + baseOffsetY + (stroke.center[1] * scale);
+            const radius = stroke.radius * scale;
+            referenceGuideGraphics.strokeCircle(centerX, centerY, radius);
         }
     }
 
     // Draw current stroke guide in yellow
     const currentStrokeData = currentCharacter.strokes[currentStroke];
-    strokeGuideGraphics.lineStyle(6, 0xffd93d, 1.0);
+    referenceGuideGraphics.lineStyle(3, 0xffd93d, 1.0);
 
     if (currentStrokeData.type === 'line') {
         // Draw stroke path
-        strokeGuideGraphics.beginPath();
-        strokeGuideGraphics.moveTo(currentStrokeData.points[0][0], currentStrokeData.points[0][1]);
+        referenceGuideGraphics.beginPath();
+        const startX = offsetX + baseOffsetX + (currentStrokeData.points[0][0] * scale);
+        const startY = offsetY + baseOffsetY + (currentStrokeData.points[0][1] * scale);
+        referenceGuideGraphics.moveTo(startX, startY);
         for (let i = 1; i < currentStrokeData.points.length; i++) {
-            strokeGuideGraphics.lineTo(currentStrokeData.points[i][0], currentStrokeData.points[i][1]);
+            const x = offsetX + baseOffsetX + (currentStrokeData.points[i][0] * scale);
+            const y = offsetY + baseOffsetY + (currentStrokeData.points[i][1] * scale);
+            referenceGuideGraphics.lineTo(x, y);
         }
-        strokeGuideGraphics.strokePath();
+        referenceGuideGraphics.strokePath();
 
         // Draw start point indicator
-        strokeGuideGraphics.fillStyle(0xff0000, 1);
-        strokeGuideGraphics.fillCircle(currentStrokeData.points[0][0], currentStrokeData.points[0][1], 12);
+        referenceGuideGraphics.fillStyle(0xff0000, 1);
+        referenceGuideGraphics.fillCircle(startX, startY, 4);
 
         // Draw arrow at end
         const lastIdx = currentStrokeData.points.length - 1;
-        const endX = currentStrokeData.points[lastIdx][0];
-        const endY = currentStrokeData.points[lastIdx][1];
-        const prevX = currentStrokeData.points[lastIdx - 1][0];
-        const prevY = currentStrokeData.points[lastIdx - 1][1];
+        const endX = offsetX + baseOffsetX + (currentStrokeData.points[lastIdx][0] * scale);
+        const endY = offsetY + baseOffsetY + (currentStrokeData.points[lastIdx][1] * scale);
+        const prevX = offsetX + baseOffsetX + (currentStrokeData.points[lastIdx - 1][0] * scale);
+        const prevY = offsetY + baseOffsetY + (currentStrokeData.points[lastIdx - 1][1] * scale);
 
         const angle = Math.atan2(endY - prevY, endX - prevX);
-        strokeGuideGraphics.fillStyle(0x00ff00, 1);
-        strokeGuideGraphics.fillTriangle(
+        referenceGuideGraphics.fillStyle(0x00ff00, 1);
+        referenceGuideGraphics.fillTriangle(
             endX, endY,
-            endX - 15 * Math.cos(angle - 0.5), endY - 15 * Math.sin(angle - 0.5),
-            endX - 15 * Math.cos(angle + 0.5), endY - 15 * Math.sin(angle + 0.5)
+            endX - 6 * Math.cos(angle - 0.5), endY - 6 * Math.sin(angle - 0.5),
+            endX - 6 * Math.cos(angle + 0.5), endY - 6 * Math.sin(angle + 0.5)
         );
     } else if (currentStrokeData.type === 'circle') {
-        strokeGuideGraphics.strokeCircle(currentStrokeData.center[0], currentStrokeData.center[1], currentStrokeData.radius);
+        const centerX = offsetX + baseOffsetX + (currentStrokeData.center[0] * scale);
+        const centerY = offsetY + baseOffsetY + (currentStrokeData.center[1] * scale);
+        const radius = currentStrokeData.radius * scale;
+        referenceGuideGraphics.strokeCircle(centerX, centerY, radius);
 
         // Draw start point at top of circle
-        strokeGuideGraphics.fillStyle(0xff0000, 1);
-        strokeGuideGraphics.fillCircle(currentStrokeData.center[0], currentStrokeData.center[1] - currentStrokeData.radius, 12);
+        referenceGuideGraphics.fillStyle(0xff0000, 1);
+        referenceGuideGraphics.fillCircle(centerX, centerY - radius, 4);
     }
 }
 
