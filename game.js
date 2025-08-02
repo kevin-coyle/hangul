@@ -604,6 +604,11 @@ function checkDrawing() {
 
             // Show congratulations animation
             showCongratulations();
+
+            // Automatically advance to next character after celebration
+            setTimeout(() => {
+                nextCharacter();
+            }, 2500); // Wait for congratulations animation to finish
         } else {
             // Some strokes don't match - show feedback
             graphics.clear();
