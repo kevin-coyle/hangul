@@ -279,6 +279,7 @@ let bgMusic0;
 let bgMusic1;
 let bgMusic2;
 let bgMusic3;
+let bgMusic4;
 let successSound;
 let currentBgMusic = 0;
 let isMuted = false;
@@ -298,6 +299,7 @@ function preload() {
     this.load.audio('bgMusic1', 'song1.mp3');
     this.load.audio('bgMusic2', 'song2.mp3');
     this.load.audio('bgMusic3', 'song3.mp3');
+    this.load.audio('bgMusic4', 'song4.mp3');
     this.load.audio('success', 'success.mp3');
 }
 
@@ -373,16 +375,18 @@ function create() {
     bgMusic1 = this.sound.add('bgMusic1', { loop: false, volume: 0.3 });
     bgMusic2 = this.sound.add('bgMusic2', { loop: false, volume: 0.3 });
     bgMusic3 = this.sound.add('bgMusic3', { loop: false, volume: 0.3 });
+    bgMusic4 = this.sound.add('bgMusic4', { loop: false, volume: 0.3 });
     successSound = this.sound.add('success', { volume: 0.5 });
 
     // Store in array for easy cycling
-    bgMusicArray = [bgMusic0, bgMusic1, bgMusic2, bgMusic3];
+    bgMusicArray = [bgMusic0, bgMusic1, bgMusic2, bgMusic3, bgMusic4];
 
     // Set up auto-progression when songs end
     bgMusic0.on('complete', () => playNextSong());
     bgMusic1.on('complete', () => playNextSong());
     bgMusic2.on('complete', () => playNextSong());
     bgMusic3.on('complete', () => playNextSong());
+    bgMusic4.on('complete', () => playNextSong());
 
     // Don't start music yet - wait for start button
 
