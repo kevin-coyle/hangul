@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hangul Drawing Practice</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3.70.0/dist/phaser.min.js"></script>
+</head>
+<body>
+    <div id="start-screen">
+        <div id="start-content">
+            <h1 class="start-title">한글 Hangul Drawing Practice</h1>
+            <div class="start-subtitle">Learn Korean Characters!</div>
+            <div class="start-instructions">
+                🎮 Draw Korean characters stroke by stroke<br>
+                🎵 Enjoy 8-bit music and sounds<br>
+                🏆 Score points and level up!
+            </div>
+            <button id="start-btn">▶ START GAME</button>
+            <div class="start-footer">Click START to enter fullscreen mode</div>
+        </div>
+    </div>
+
+    <div id="game-container">
+        <h1>한글 Hangul Drawing Practice</h1>
+        <div id="phaser-game"></div>
+        <div id="game-info">
+            <div class="info-item">
+                <span class="label">Character:</span>
+                <span id="current-char" class="value">-</span>
+            </div>
+            <div class="info-item">
+                <span class="label">Romanization:</span>
+                <span id="romanization" class="value">-</span>
+            </div>
+            <div class="info-item">
+                <span class="label">Score:</span>
+                <span id="score" class="value">0</span>
+            </div>
+            <div class="info-item">
+                <span class="label">Level:</span>
+                <span id="level" class="value">1</span>
+            </div>
+        </div>
+        <div id="controls">
+            <button id="clear-btn">Clear Drawing</button>
+            <button id="next-btn">Next Character</button>
+            <button id="hint-btn">Show Hint</button>
+        </div>
+        <div id="audio-controls">
+            <button id="mute-btn">🔊 MUTE</button>
+            <button id="music-btn">♪ SONG 0</button>
+        </div>
+    </div>
+    <script src="game.js"></script>
+</body>
+</html>
