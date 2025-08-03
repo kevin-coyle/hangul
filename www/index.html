@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
@@ -9,6 +10,7 @@
     <link rel="stylesheet" href="style.css">
     <script src="https://cdn.jsdelivr.net/npm/phaser@3.70.0/dist/phaser.min.js"></script>
 </head>
+
 <body>
     <div id="start-screen">
         <div id="start-content">
@@ -31,38 +33,48 @@
             <div class="rotate-icon">📱↻</div>
         </div>
     </div>
-    
+
     <div id="game-container">
-        <h1>한글 Hangul Drawing Practice</h1>
+        <!-- Top header with character info -->
+        <div id="game-header">
+            <div id="character-display">
+                <span id="current-char">-</span>
+                <span id="romanization">-</span>
+            </div>
+            <button id="stats-toggle" title="View Stats">📊</button>
+        </div>
+
+        <!-- Main drawing area -->
         <div id="phaser-game"></div>
-        <div id="game-info">
-            <div class="info-item">
-                <span class="label">Character:</span>
-                <span id="current-char" class="value">-</span>
-            </div>
-            <div class="info-item">
-                <span class="label">Romanization:</span>
-                <span id="romanization" class="value">-</span>
-            </div>
-            <div class="info-item">
-                <span class="label">Score:</span>
-                <span id="score" class="value">0</span>
-            </div>
-            <div class="info-item">
-                <span class="label">Level:</span>
-                <span id="level" class="value">1</span>
-            </div>
+
+        <!-- Bottom controls -->
+        <div id="bottom-controls">
+            <button id="clear-btn" title="Clear Drawing">🗑️</button>
+            <button id="hint-btn" title="Show Hint">💡</button>
+            <button id="next-btn" title="Next Character">▶</button>
         </div>
-        <div id="controls">
-            <button id="clear-btn">Clear Drawing</button>
-            <button id="next-btn">Next Character</button>
-            <button id="hint-btn">Show Hint</button>
-        </div>
-        <div id="audio-controls">
-            <button id="mute-btn">🔊 MUTE</button>
-            <button id="music-btn">♪ SONG 0</button>
+
+        <!-- Hidden stats panel -->
+        <div id="stats-panel" style="display: none;">
+            <div class="stats-content">
+                <h3>Game Stats</h3>
+                <div class="stat-item">
+                    <span class="stat-label">Score:</span>
+                    <span id="score" class="stat-value">0</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Level:</span>
+                    <span id="level" class="stat-value">1</span>
+                </div>
+                <div class="stat-controls">
+                    <button id="mute-btn" title="Toggle Mute">🔊</button>
+                    <button id="music-btn" title="Change Song">♪</button>
+                </div>
+                <button id="close-stats">✕</button>
+            </div>
         </div>
     </div>
     <script src="game.js"></script>
 </body>
+
 </html>

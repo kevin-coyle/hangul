@@ -263,7 +263,7 @@ const config = {
         target: null
     },
     audio: {
-        disableWebAudio: false,
+        disableWebAudio: true,  // Use HTML5 Audio instead for better Capacitor compatibility
         noAudio: false
     }
 };
@@ -368,11 +368,11 @@ function create() {
     congratsImage.setDepth(100);
 
     // Guide text with 8-bit style
-    guideText = this.add.text(400, 80, 'Draw freely on the canvas! Check the reference box for stroke guides!', {
+    guideText = this.add.text(400, 80, 'Draw the character!', {
         fontSize: '18px',
         fontFamily: 'monospace',
         color: '#000000',
-        backgroundColor: '#ffff00',
+        backgroundColor: '#667eea',
         padding: { x: 10, y: 5 },
         align: 'center'
     });
@@ -380,9 +380,9 @@ function create() {
 
     // Set up input handlers
     this.input.on('pointerdown', (pointer) => {
-        // Ensure audio is unlocked on first interaction
-        if (this.sound.context && this.sound.context.state === 'suspended') {
-            this.sound.context.resume();
+        // Initialize audio on first interaction for mobile
+        if (!gameStarted) {
+            initMobileAudio();
         }
         startDrawing(pointer);
     }, this);
@@ -414,8 +414,11 @@ function create() {
 
     // Set up button handlers
     document.getElementById('clear-btn').addEventListener('click', clearDrawing);
+
     document.getElementById('next-btn').addEventListener('click', nextCharacter);
     document.getElementById('hint-btn').addEventListener('click', toggleHint);
+    document.getElementById('stats-toggle').addEventListener('click', showStats);
+    document.getElementById('close-stats').addEventListener('click', hideStats);
     document.getElementById('mute-btn').addEventListener('click', toggleMute);
     document.getElementById('music-btn').addEventListener('click', switchMusic);
 
@@ -516,7 +519,17 @@ function stopDrawing() {
                 });
                 drawStrokeGuide();
             } else {
-                checkDrawing();
+                guideText.setText(`All strokes complete! Checking your drawing...`);
+                guideText.setStyle({
+                    backgroundColor: '#27ae60',
+                    color: '#ffffff'
+                });
+                referenceGuideGraphics.clear();
+
+                // Automatically check the drawing after a brief delay
+                setTimeout(() => {
+                    checkDrawing();
+                }, 500);
             }
         }
 
@@ -525,11 +538,9 @@ function stopDrawing() {
 }
 
 function clearDrawing() {
-    // Ensure audio context is active
-    if (game && game.sound && game.sound.context && game.sound.context.state === 'suspended') {
-        game.sound.context.resume();
-    }
-    
+    // Initialize audio if needed
+    initMobileAudio();
+
     graphics.clear();
     drawnPath = [];
     allStrokes = [];
@@ -539,7 +550,7 @@ function clearDrawing() {
     referenceGuideGraphics.clear();
 
     if (currentCharacter) {
-        guideText.setText(`Stroke 1 of ${currentCharacter.strokeCount} - See guide in reference box!`);
+        guideText.setText(`Draw the character!`);
         guideText.setStyle({
             backgroundColor: '#667eea',
             color: '#ffffff'
@@ -562,7 +573,7 @@ function nextCharacter() {
     document.getElementById('romanization').textContent = currentCharacter.romanization;
 
     // Reset guide text
-    guideText.setText(`Stroke 1 of ${currentCharacter.strokeCount} - See guide in reference box!`);
+    guideText.setText(`Draw the character!`);
     guideText.setStyle({
         backgroundColor: '#667eea',
         color: '#ffffff'
@@ -570,110 +581,616 @@ function nextCharacter() {
 }
 
 function checkDrawing() {
-    // Check if all strokes are completed
-    if (currentStroke === currentCharacter.strokeCount) {
-        // Validate each stroke against the expected pattern
-        let allStrokesValid = true;
-        let feedback = [];
+    // Check if user has drawn something
+    if (allStrokes.length > 0) {
+        // Show loading message
+        guideText.setText('Checking your drawing...');
+        guideText.setStyle({
+            backgroundColor: '#ffd93d',
+            color: '#000000'
+        });
 
-        for (let i = 0; i < allStrokes.length; i++) {
-            const drawnStroke = allStrokes[i];
-            const expectedStroke = currentCharacter.strokes[i];
-            const isValid = validateStroke(drawnStroke, expectedStroke);
+        // Use intelligent stroke recognition instead of OCR
+        validateDrawingWithPatterns();
+    }
+}
 
+function validateDrawingWithPatterns() {
+    try {
+        // Analyze the drawing using intelligent pattern recognition
+        const isCorrect = analyzeStrokePatterns(allStrokes, currentCharacter);
 
-
-            if (!isValid) {
-                allStrokesValid = false;
-                feedback.push(`Stroke ${i + 1} doesn't match the expected pattern`);
-            }
-        }
-
-        if (allStrokesValid) {
-            // Success! Redraw all strokes in green
-            graphics.clear();
-            graphics.lineStyle(8, 0x4ecdc4, 1);
-
-            for (let stroke of allStrokes) {
-                if (stroke.length > 0) {
-                    graphics.beginPath();
-                    graphics.moveTo(stroke[0].x, stroke[0].y);
-
-                    for (let i = 1; i < stroke.length; i++) {
-                        graphics.lineTo(stroke[i].x, stroke[i].y);
-                    }
-
-                    graphics.strokePath();
-                }
-            }
-
-            // Update score
-            score += 10 * currentCharacter.strokeCount;
-            document.getElementById('score').textContent = score;
-
-            // Level up every 100 points
-            if (score > 0 && score % 100 === 0) {
-                level++;
-                document.getElementById('level').textContent = level;
-            }
-
-            // Show success message
-            guideText.setText('Perfect! All strokes completed!');
-            guideText.setStyle({
-                backgroundColor: '#00ff00',
-                color: '#000000'
-            });
-            referenceGuideGraphics.clear();
-
-            // Play success sound
-            if (!isMuted) {
-                // Ensure audio context is resumed before playing
-                if (game.sound.context && game.sound.context.state === 'suspended') {
-                    game.sound.context.resume().then(() => {
-                        successSound.play();
-                    });
-                } else {
-                    successSound.play();
-                }
-            }
-
-            // Show congratulations animation
-            showCongratulations();
-
-            // Automatically advance to next character after celebration
-            setTimeout(() => {
-                nextCharacter();
-            }, 2500); // Wait for congratulations animation to finish
+        if (isCorrect) {
+            handleCorrectDrawing();
         } else {
-            // Some strokes don't match - show feedback
-            graphics.clear();
-            graphics.lineStyle(8, 0xff6b6b, 1); // Red color for incorrect strokes
+            handleIncorrectDrawing();
+        }
+    } catch (error) {
+        console.error('Pattern validation error:', error);
+        // Fall back to simple validation
+        fallbackStrokeValidation();
+    }
+}
 
-            for (let stroke of allStrokes) {
-                if (stroke.length > 0) {
-                    graphics.beginPath();
-                    graphics.moveTo(stroke[0].x, stroke[0].y);
+function analyzeStrokePatterns(strokes, character) {
+    if (!strokes || strokes.length === 0) return false;
 
-                    for (let i = 1; i < stroke.length; i++) {
-                        graphics.lineTo(stroke[i].x, stroke[i].y);
-                    }
+    // Analyze stroke directions and relationships
+    const analysis = analyzeStrokes(strokes);
+    console.log('Stroke analysis:', analysis);
 
-                    graphics.strokePath();
+    // Get pattern for the current character
+    const expectedPattern = getCharacterPattern(character.char);
+    if (!expectedPattern) return false;
+
+    // Compare patterns
+    return matchesPattern(analysis, expectedPattern);
+}
+
+function analyzeStrokes(strokes) {
+    const analysis = {
+        strokeCount: strokes.length,
+        strokes: []
+    };
+
+    for (let stroke of strokes) {
+        if (stroke.length < 2) continue;
+
+        const strokeAnalysis = {
+            length: stroke.length,
+            direction: getStrokeDirection(stroke),
+            type: getStrokeType(stroke),
+            bounds: getStrokeBounds(stroke)
+        };
+
+        analysis.strokes.push(strokeAnalysis);
+    }
+
+    return analysis;
+}
+
+function getStrokeDirection(stroke) {
+    if (stroke.length < 2) return 'none';
+
+    const start = stroke[0];
+    const end = stroke[stroke.length - 1];
+    const dx = end.x - start.x;
+    const dy = end.y - start.y;
+
+    const angle = Math.atan2(dy, dx) * 180 / Math.PI;
+
+    // Classify into 8 directions
+    if (angle >= -22.5 && angle < 22.5) return 'right';
+    if (angle >= 22.5 && angle < 67.5) return 'down-right';
+    if (angle >= 67.5 && angle < 112.5) return 'down';
+    if (angle >= 112.5 && angle < 157.5) return 'down-left';
+    if (angle >= 157.5 || angle < -157.5) return 'left';
+    if (angle >= -157.5 && angle < -112.5) return 'up-left';
+    if (angle >= -112.5 && angle < -67.5) return 'up';
+    if (angle >= -67.5 && angle < -22.5) return 'up-right';
+
+    return 'unknown';
+}
+
+function getStrokeType(stroke) {
+    if (stroke.length < 3) return 'short';
+
+    // Check if it's roughly a straight line
+    const start = stroke[0];
+    const end = stroke[stroke.length - 1];
+    let maxDeviation = 0;
+
+    for (let point of stroke) {
+        const deviation = pointToLineDistance(point, start, end);
+        maxDeviation = Math.max(maxDeviation, deviation);
+    }
+
+    // Be more strict about what constitutes a line
+    if (maxDeviation < 30) return 'line';
+
+    // Check if it's circular - need to be much more strict
+    const center = getCenterPoint(stroke);
+    const avgRadius = getAverageRadius(stroke, center);
+    let radiusDeviation = 0;
+
+    for (let point of stroke) {
+        const radius = distance(point, center);
+        radiusDeviation += Math.abs(radius - avgRadius);
+    }
+
+    // Only consider it a circle if it's very round and closed
+    const avgRadiusDeviation = radiusDeviation / stroke.length;
+    const startToEndDistance = distance(start, end);
+    const isClosedShape = startToEndDistance < avgRadius * 0.3;
+
+    if (avgRadiusDeviation < 15 && isClosedShape && avgRadius > 20) {
+        return 'circle';
+    }
+
+    return 'curve';
+}
+
+function getStrokeBounds(stroke) {
+    let minX = Infinity, maxX = -Infinity;
+    let minY = Infinity, maxY = -Infinity;
+
+    for (let point of stroke) {
+        minX = Math.min(minX, point.x);
+        maxX = Math.max(maxX, point.x);
+        minY = Math.min(minY, point.y);
+        maxY = Math.max(maxY, point.y);
+    }
+
+    return { minX, maxX, minY, maxY, width: maxX - minX, height: maxY - minY };
+}
+
+function getCenterPoint(stroke) {
+    let sumX = 0, sumY = 0;
+    for (let point of stroke) {
+        sumX += point.x;
+        sumY += point.y;
+    }
+    return { x: sumX / stroke.length, y: sumY / stroke.length };
+}
+
+function getAverageRadius(stroke, center) {
+    let sumRadius = 0;
+    for (let point of stroke) {
+        sumRadius += distance(point, center);
+    }
+    return sumRadius / stroke.length;
+}
+
+function pointToLineDistance(point, lineStart, lineEnd) {
+    const A = point.x - lineStart.x;
+    const B = point.y - lineStart.y;
+    const C = lineEnd.x - lineStart.x;
+    const D = lineEnd.y - lineStart.y;
+
+    const dot = A * C + B * D;
+    const lenSq = C * C + D * D;
+
+    if (lenSq === 0) return distance(point, lineStart);
+
+    let param = dot / lenSq;
+
+    let xx, yy;
+    if (param < 0) {
+        xx = lineStart.x;
+        yy = lineStart.y;
+    } else if (param > 1) {
+        xx = lineEnd.x;
+        yy = lineEnd.y;
+    } else {
+        xx = lineStart.x + param * C;
+        yy = lineStart.y + param * D;
+    }
+
+    return distance(point, { x: xx, y: yy });
+}
+
+function getCharacterPattern(char) {
+    const patterns = {
+        'ㄱ': {
+            strokeCount: 2,
+            strokes: [
+                { direction: 'right', type: 'line' },
+                { direction: 'down', type: 'line' }
+            ]
+        },
+        'ㄴ': {
+            strokeCount: 2,
+            strokes: [
+                { direction: 'down', type: 'line' },
+                { direction: 'right', type: 'line' }
+            ]
+        },
+        'ㄷ': {
+            strokeCount: 3,
+            strokes: [
+                { direction: 'right', type: 'line' },
+                { direction: 'down', type: 'line' },
+                { direction: 'right', type: 'line' }
+            ]
+        },
+        'ㄹ': {
+            strokeCount: 5,
+            strokes: [
+                { direction: 'right', type: 'line' },
+                { direction: 'down', type: 'line' },
+                { direction: 'right', type: 'line' },
+                { direction: 'down', type: 'line' },
+                { direction: 'right', type: 'line' }
+            ]
+        },
+        'ㅁ': {
+            strokeCount: 4,
+            strokes: [
+                { direction: 'down', type: 'line' },
+                { direction: 'right', type: 'line' },
+                { direction: 'down', type: 'line' },
+                { direction: 'right', type: 'line' }
+            ]
+        },
+        'ㅂ': {
+            strokeCount: 4,
+            strokes: [
+                { direction: 'down', type: 'line' },
+                { direction: 'down', type: 'line' },
+                { direction: 'right', type: 'line' },
+                { direction: 'right', type: 'line' }
+            ]
+        },
+        'ㅅ': {
+            strokeCount: 2,
+            strokes: [
+                { direction: 'down-left', type: 'line' },
+                { direction: 'down-right', type: 'line' }
+            ]
+        },
+        'ㅇ': {
+            strokeCount: 1,
+            strokes: [
+                { type: 'circle' }
+            ]
+        },
+        'ㅈ': {
+            strokeCount: 3,
+            strokes: [
+                { direction: 'right', type: 'line' },
+                { direction: 'down-left', type: 'line' },
+                { direction: 'down-right', type: 'line' }
+            ]
+        },
+        'ㅊ': {
+            strokeCount: 4,
+            strokes: [
+                { direction: 'down', type: 'line' },
+                { direction: 'right', type: 'line' },
+                { direction: 'down-left', type: 'line' },
+                { direction: 'down-right', type: 'line' }
+            ]
+        },
+        'ㅋ': {
+            strokeCount: 3,
+            strokes: [
+                { direction: 'right', type: 'line' },
+                { direction: 'right', type: 'line' },
+                { direction: 'down', type: 'line' }
+            ]
+        },
+        'ㅌ': {
+            strokeCount: 4,
+            strokes: [
+                { direction: 'right', type: 'line' },
+                { direction: 'down', type: 'line' },
+                { direction: 'right', type: 'line' },
+                { direction: 'right', type: 'line' }
+            ]
+        },
+        'ㅍ': {
+            strokeCount: 4,
+            strokes: [
+                { direction: 'right', type: 'line' },
+                { direction: 'right', type: 'line' },
+                { direction: 'down', type: 'line' },
+                { direction: 'down', type: 'line' }
+            ]
+        },
+        'ㅎ': {
+            strokeCount: 3,
+            strokes: [
+                { direction: 'down', type: 'line' },
+                { direction: 'right', type: 'line' },
+                { type: 'circle' }
+            ]
+        },
+        // Vowels
+        'ㅏ': {
+            strokeCount: 2,
+            strokes: [
+                { direction: 'down', type: 'line' },
+                { direction: 'right', type: 'line' }
+            ]
+        },
+        'ㅑ': {
+            strokeCount: 3,
+            strokes: [
+                { direction: 'down', type: 'line' },
+                { direction: 'right', type: 'line' },
+                { direction: 'right', type: 'line' }
+            ]
+        },
+        'ㅓ': {
+            strokeCount: 2,
+            strokes: [
+                { direction: 'down', type: 'line' },
+                { direction: 'left', type: 'line' }
+            ]
+        },
+        'ㅕ': {
+            strokeCount: 3,
+            strokes: [
+                { direction: 'down', type: 'line' },
+                { direction: 'left', type: 'line' },
+                { direction: 'left', type: 'line' }
+            ]
+        },
+        'ㅗ': {
+            strokeCount: 2,
+            strokes: [
+                { direction: 'right', type: 'line' },
+                { direction: 'up', type: 'line' }
+            ]
+        },
+        'ㅛ': {
+            strokeCount: 3,
+            strokes: [
+                { direction: 'right', type: 'line' },
+                { direction: 'up', type: 'line' },
+                { direction: 'up', type: 'line' }
+            ]
+        },
+        'ㅜ': {
+            strokeCount: 2,
+            strokes: [
+                { direction: 'right', type: 'line' },
+                { direction: 'down', type: 'line' }
+            ]
+        },
+        'ㅠ': {
+            strokeCount: 3,
+            strokes: [
+                { direction: 'right', type: 'line' },
+                { direction: 'down', type: 'line' },
+                { direction: 'down', type: 'line' }
+            ]
+        },
+        'ㅡ': {
+            strokeCount: 1,
+            strokes: [
+                { direction: 'right', type: 'line' }
+            ]
+        },
+        'ㅣ': {
+            strokeCount: 1,
+            strokes: [
+                { direction: 'down', type: 'line' }
+            ]
+        }
+    };
+
+    return patterns[char];
+}
+
+function matchesPattern(analysis, pattern) {
+    // Stroke count must be exact (allow ±1 for drawing variations)
+    if (Math.abs(analysis.strokeCount - pattern.strokeCount) > 1) {
+        return false;
+    }
+
+    // Must have drawn something
+    if (analysis.strokes.length === 0) return false;
+
+    // Score the match based on stroke directions and types
+    let matchScore = 0;
+    let maxPossibleScore = pattern.strokes.length;
+
+    // For each expected stroke, find the best matching drawn stroke
+    for (let expectedStroke of pattern.strokes) {
+        let bestMatch = 0;
+
+        for (let actualStroke of analysis.strokes) {
+            let strokeScore = 0;
+
+            // Check type match (line vs circle)
+            if (expectedStroke.type === 'circle' && actualStroke.type === 'circle') {
+                strokeScore += 1; // Perfect circle match
+            } else if (expectedStroke.type === 'line' && actualStroke.type === 'line') {
+                // Check direction match for lines
+                if (expectedStroke.direction === actualStroke.direction) {
+                    strokeScore += 1; // Perfect direction match
+                } else if (isSimilarDirection(expectedStroke.direction, actualStroke.direction)) {
+                    strokeScore += 0.5; // Similar direction
                 }
             }
 
-            // Show feedback
-            guideText.setText('Not quite right. Try again!');
-            guideText.setStyle({
-                backgroundColor: '#ff6b6b',
-                color: '#ffffff'
-            });
-
-            // Auto-clear after 2 seconds to try again
-            setTimeout(() => {
-                clearDrawing();
-            }, 2000);
+            bestMatch = Math.max(bestMatch, strokeScore);
         }
+
+        matchScore += bestMatch;
+    }
+
+    // Require at least 70% match for approval
+    const matchPercentage = matchScore / maxPossibleScore;
+    console.log(`Pattern match: ${matchScore}/${maxPossibleScore} = ${(matchPercentage * 100).toFixed(1)}%`);
+
+    return matchPercentage >= 0.7;
+}
+
+function isSimilarDirection(dir1, dir2) {
+    const directionGroups = {
+        horizontal: ['left', 'right'],
+        vertical: ['up', 'down'],
+        diagonal1: ['up-right', 'down-left'],
+        diagonal2: ['up-left', 'down-right']
+    };
+
+    for (let group of Object.values(directionGroups)) {
+        if (group.includes(dir1) && group.includes(dir2)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+function captureDrawingArea() {
+    // Create a larger canvas for better OCR accuracy
+    const tempCanvas = document.createElement('canvas');
+    const tempCtx = tempCanvas.getContext('2d');
+
+    // Use larger canvas for better OCR resolution
+    tempCanvas.width = 200;
+    tempCanvas.height = 200;
+
+    // Fill with white background
+    tempCtx.fillStyle = 'white';
+    tempCtx.fillRect(0, 0, 200, 200);
+
+    // Calculate drawing bounds to center the character
+    let minX = Infinity, maxX = -Infinity;
+    let minY = Infinity, maxY = -Infinity;
+
+    for (let stroke of allStrokes) {
+        for (let point of stroke) {
+            minX = Math.min(minX, point.x);
+            maxX = Math.max(maxX, point.x);
+            minY = Math.min(minY, point.y);
+            maxY = Math.max(maxY, point.y);
+        }
+    }
+
+    // Add padding and calculate scale to fit drawing in canvas
+    const padding = 20;
+    const drawingWidth = maxX - minX;
+    const drawingHeight = maxY - minY;
+    const availableWidth = 200 - (padding * 2);
+    const availableHeight = 200 - (padding * 2);
+
+    const scale = Math.min(
+        availableWidth / drawingWidth,
+        availableHeight / drawingHeight,
+        1 // Don't scale up
+    );
+
+    const offsetX = padding + (availableWidth - drawingWidth * scale) / 2;
+    const offsetY = padding + (availableHeight - drawingHeight * scale) / 2;
+
+    // Draw the strokes in thick black lines
+    tempCtx.strokeStyle = 'black';
+    tempCtx.lineWidth = 12;
+    tempCtx.lineCap = 'round';
+    tempCtx.lineJoin = 'round';
+
+    for (let stroke of allStrokes) {
+        if (stroke.length > 0) {
+            tempCtx.beginPath();
+            const startX = offsetX + (stroke[0].x - minX) * scale;
+            const startY = offsetY + (stroke[0].y - minY) * scale;
+            tempCtx.moveTo(startX, startY);
+
+            for (let i = 1; i < stroke.length; i++) {
+                const x = offsetX + (stroke[i].x - minX) * scale;
+                const y = offsetY + (stroke[i].y - minY) * scale;
+                tempCtx.lineTo(x, y);
+            }
+
+            tempCtx.stroke();
+        }
+    }
+
+    return tempCanvas;
+}
+
+function handleCorrectDrawing() {
+    // Success! Redraw all strokes in green
+    graphics.clear();
+    graphics.lineStyle(8, 0x4ecdc4, 1);
+
+    for (let stroke of allStrokes) {
+        if (stroke.length > 0) {
+            graphics.beginPath();
+            graphics.moveTo(stroke[0].x, stroke[0].y);
+
+            for (let i = 1; i < stroke.length; i++) {
+                graphics.lineTo(stroke[i].x, stroke[i].y);
+            }
+
+            graphics.strokePath();
+        }
+    }
+
+    // Update score
+    score += 10 * currentCharacter.strokeCount;
+    document.getElementById('score').textContent = score;
+
+    // Level up every 100 points
+    if (score > 0 && score % 100 === 0) {
+        level++;
+        document.getElementById('level').textContent = level;
+    }
+
+    // Show success message
+    guideText.setText('Perfect! Character recognized!');
+    guideText.setStyle({
+        backgroundColor: '#00ff00',
+        color: '#000000'
+    });
+    referenceGuideGraphics.clear();
+
+    // Play success sound
+    if (!isMuted && successSound) {
+        try {
+            successSound.play();
+        } catch (e) {
+            console.log('Success sound play failed:', e);
+        }
+    }
+
+    // Show congratulations animation
+    showCongratulations();
+
+    // Automatically advance to next character after celebration
+    setTimeout(() => {
+        nextCharacter();
+    }, 2500);
+}
+
+function handleIncorrectDrawing() {
+    // Some strokes don't match - show feedback
+    graphics.clear();
+    graphics.lineStyle(8, 0xff6b6b, 1); // Red color for incorrect strokes
+
+    for (let stroke of allStrokes) {
+        if (stroke.length > 0) {
+            graphics.beginPath();
+            graphics.moveTo(stroke[0].x, stroke[0].y);
+
+            for (let i = 1; i < stroke.length; i++) {
+                graphics.lineTo(stroke[i].x, stroke[i].y);
+            }
+
+            graphics.strokePath();
+        }
+    }
+
+    // Show feedback
+    guideText.setText('Character not recognized. Try again!');
+    guideText.setStyle({
+        backgroundColor: '#ff6b6b',
+        color: '#ffffff'
+    });
+
+    // Auto-clear after 3 seconds to try again
+    setTimeout(() => {
+        clearDrawing();
+    }, 3000);
+}
+
+function fallbackStrokeValidation() {
+    // Fallback to simple stroke count validation
+    guideText.setText('Using simple validation');
+    guideText.setStyle({
+        backgroundColor: '#ffd93d',
+        color: '#000000'
+    });
+
+    // Simple check - if user drew something, consider it correct for now
+    if (allStrokes.length > 0) {
+        handleCorrectDrawing();
+    } else {
+        handleIncorrectDrawing();
     }
 }
 
@@ -692,7 +1209,7 @@ function validateStroke(drawnStroke, expectedStroke) {
 }
 
 function validateLineStroke(drawnStroke, expectedStroke) {
-    const tolerance = 200; // Very forgiving pixel tolerance
+    const tolerance = 150; // Reasonable pixel tolerance
     const expectedPoints = expectedStroke.points;
 
     // Check if start point is close to expected start
@@ -719,7 +1236,7 @@ function validateLineStroke(drawnStroke, expectedStroke) {
 }
 
 function validateCircleStroke(drawnStroke, expectedStroke) {
-    const tolerance = 150; // Very forgiving pixel tolerance for circle matching
+    const tolerance = 100; // Reasonable pixel tolerance for circle matching
     const expectedCenter = expectedStroke.center;
     const expectedRadius = expectedStroke.radius;
 
@@ -736,8 +1253,8 @@ function validateCircleStroke(drawnStroke, expectedStroke) {
         }
     }
 
-    // Only need 30% of points to be close to the expected circle
-    return (validPointsCount / totalPoints) >= 0.3;
+    // Need 40% of points to be close to the expected circle
+    return (validPointsCount / totalPoints) >= 0.4;
 }
 
 function validateStraightLine(drawnStroke, startPoint, endPoint, tolerance) {
@@ -757,8 +1274,8 @@ function validateStraightLine(drawnStroke, startPoint, endPoint, tolerance) {
         }
     }
 
-    // Only need 40% of points to be close to the expected line
-    return (validPointsCount / totalPoints) >= 0.4;
+    // Need 50% of points to be close to the expected line
+    return (validPointsCount / totalPoints) >= 0.5;
 }
 
 function validateComplexPath(drawnStroke, expectedPoints, tolerance) {
@@ -775,8 +1292,8 @@ function validateComplexPath(drawnStroke, expectedPoints, tolerance) {
         }
     }
 
-    // Only need 30% of key points to match
-    return (validSegments / expectedPoints.length) >= 0.3;
+    // Need 40% of key points to match
+    return (validSegments / expectedPoints.length) >= 0.4;
 }
 
 function samplePoints(drawnStroke, numSamples) {
@@ -1005,53 +1522,90 @@ function playNextSong() {
 
     // Move to next song in sequence
     currentBgMusic = (currentBgMusic + 1) % bgMusicArray.length;
-    bgMusicArray[currentBgMusic].play();
 
-    // Update button text
-    document.getElementById('music-btn').textContent = `♪ SONG ${currentBgMusic}`;
+    if (bgMusicArray[currentBgMusic]) {
+        try {
+            bgMusicArray[currentBgMusic].play();
+        } catch (e) {
+            console.log('Next song play failed:', e);
+        }
+    }
+
+    // Update button title
+    document.getElementById('music-btn').title = `Change Song (Current: Song ${currentBgMusic})`;
 }
 
 function toggleMute() {
-    // Ensure audio context is initialized
-    initAudioContext();
-    
+    // Initialize audio if needed
+    initMobileAudio();
+
     isMuted = !isMuted;
     const muteBtn = document.getElementById('mute-btn');
 
     if (isMuted) {
         // Mute all sounds
         bgMusicArray.forEach(music => {
-            if (music.isPlaying) music.pause();
+            if (music && music.isPlaying) {
+                try {
+                    music.pause();
+                } catch (e) {
+                    console.log('Music pause failed:', e);
+                }
+            }
         });
-        muteBtn.textContent = '🔇 UNMUTE';
-        muteBtn.style.backgroundColor = '#ff6b6b';
+        muteBtn.textContent = '🔇';
+        muteBtn.title = 'Unmute';
+        muteBtn.style.backgroundColor = '#e74c3c';
     } else {
         // Unmute and resume current music
         if (bgMusicArray[currentBgMusic]) {
-            bgMusicArray[currentBgMusic].resume();
+            try {
+                bgMusicArray[currentBgMusic].resume();
+            } catch (e) {
+                console.log('Music resume failed:', e);
+                // Try play instead of resume
+                try {
+                    bgMusicArray[currentBgMusic].play();
+                } catch (e2) {
+                    console.log('Music play failed:', e2);
+                }
+            }
         }
-        muteBtn.textContent = '🔊 MUTE';
-        muteBtn.style.backgroundColor = '#4ecdc4';
+        muteBtn.textContent = '🔊';
+        muteBtn.title = 'Toggle Mute';
+        muteBtn.style.backgroundColor = '#3498db';
     }
 }
 
 function switchMusic() {
-    // Ensure audio context is initialized
-    initAudioContext();
-    
+    // Initialize audio if needed
+    initMobileAudio();
+
     if (isMuted) return; // Don't switch if muted
 
     // Stop current song
-    bgMusicArray[currentBgMusic].stop();
+    if (bgMusicArray[currentBgMusic]) {
+        try {
+            bgMusicArray[currentBgMusic].stop();
+        } catch (e) {
+            console.log('Music stop failed:', e);
+        }
+    }
 
     // Move to next song
     currentBgMusic = (currentBgMusic + 1) % bgMusicArray.length;
 
     // Play new song
-    bgMusicArray[currentBgMusic].play();
+    if (bgMusicArray[currentBgMusic]) {
+        try {
+            bgMusicArray[currentBgMusic].play();
+        } catch (e) {
+            console.log('Music play failed:', e);
+        }
+    }
 
-    // Update button text
-    document.getElementById('music-btn').textContent = `♪ SONG ${currentBgMusic}`;
+    // Update button title
+    document.getElementById('music-btn').title = `Change Song (Current: Song ${currentBgMusic})`;
 }
 
 function startGame() {
@@ -1059,19 +1613,8 @@ function startGame() {
 
     gameStarted = true;
 
-    // Initialize audio context on user interaction (required for mobile)
-    initAudioContext();
-    
-    // Ensure Phaser's audio context is also resumed
-    if (game && game.sound && game.sound.context) {
-        if (game.sound.context.state === 'suspended') {
-            game.sound.context.resume().then(() => {
-                console.log('Phaser audio context resumed');
-            }).catch(e => {
-                console.log('Phaser audio resume failed:', e);
-            });
-        }
-    }
+    // Initialize audio for mobile
+    initMobileAudio();
 
     // Request fullscreen (skip on iOS as it doesn't support fullscreen API)
     if (!isIOS()) {
@@ -1087,19 +1630,23 @@ function startGame() {
 
     // Hide start screen and show game
     document.getElementById('start-screen').style.display = 'none';
-    document.getElementById('game-container').style.display = 'block';
+    document.getElementById('game-container').style.display = 'flex';
     document.body.style.display = 'flex';
 
     // Prevent touch scrolling on mobile
-    document.addEventListener('touchmove', function(e) {
+    document.addEventListener('touchmove', function (e) {
         if (e.target.closest('#phaser-game')) {
             e.preventDefault();
         }
     }, { passive: false });
 
     // Start background music with song0
-    if (!isMuted && bgMusic0) {
-        bgMusic0.play();
+    if (!isMuted && bgMusicArray[0]) {
+        try {
+            bgMusicArray[0].play();
+        } catch (e) {
+            console.log('Initial music play failed:', e);
+        }
     }
 
     // Focus on the game
@@ -1118,7 +1665,7 @@ function checkOrientation() {
     const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
     const isPortrait = window.innerHeight > window.innerWidth;
     const orientationMessage = document.getElementById('orientation-message');
-    
+
     if (isMobile && isPortrait && gameStarted) {
         orientationMessage.style.display = 'flex';
     } else {
@@ -1133,35 +1680,39 @@ window.addEventListener('resize', checkOrientation);
 // Check orientation on load
 document.addEventListener('DOMContentLoaded', checkOrientation);
 
-// Initialize Web Audio Context for iOS
-function initAudioContext() {
-    if (!audioContext) {
-        try {
-            // Create AudioContext only after user gesture
-            const AudioContext = window.AudioContext || window['webkitAudioContext'];
-            audioContext = new AudioContext();
-            
-            // For iOS, we need to play a silent buffer to unlock audio
-            if (isIOS()) {
-                const buffer = audioContext.createBuffer(1, 1, 22050);
-                const source = audioContext.createBufferSource();
-                source.buffer = buffer;
-                source.connect(audioContext.destination);
-                source.start(0);
-            }
-        } catch (e) {
-            console.log('AudioContext creation failed:', e);
+// Initialize audio for mobile devices (Capacitor-friendly)
+function initMobileAudio() {
+    // For Capacitor/mobile apps, we don't need Web Audio Context
+    // Phaser with HTML5 Audio should work fine
+    if (game && game.sound) {
+        // Ensure all audio is loaded and ready
+        if (bgMusicArray.length === 0 && bgMusic0) {
+            // Re-populate array if needed
+            bgMusicArray = [bgMusic0, bgMusic1, bgMusic2, bgMusic3, bgMusic4];
         }
+
+        console.log('Mobile audio initialized');
+        return true;
     }
-    
-    // Always try to resume if suspended
-    if (audioContext && audioContext.state === 'suspended') {
-        audioContext.resume().then(() => {
-            console.log('AudioContext resumed successfully');
-        }).catch(e => {
-            console.log('AudioContext resume failed:', e);
-        });
-    }
-    
-    return audioContext;
+    return false;
 }
+
+// Show stats panel
+function showStats() {
+    document.getElementById('stats-panel').style.display = 'flex';
+}
+
+// Hide stats panel
+function hideStats() {
+    document.getElementById('stats-panel').style.display = 'none';
+}
+
+// Close stats panel when clicking outside
+document.addEventListener('DOMContentLoaded', function () {
+    const statsPanel = document.getElementById('stats-panel');
+    statsPanel.addEventListener('click', function (e) {
+        if (e.target === statsPanel) {
+            hideStats();
+        }
+    });
+});
