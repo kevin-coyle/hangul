@@ -248,13 +248,19 @@ const config = {
     parent: 'phaser-game',
     backgroundColor: '#ffffff',
     scale: {
-        mode: Phaser.Scale.NONE,
-        autoCenter: Phaser.Scale.CENTER_BOTH
+        mode: Phaser.Scale.FIT,
+        autoCenter: Phaser.Scale.CENTER_BOTH,
+        width: 800,
+        height: 600
     },
     scene: {
         preload: preload,
         create: create,
         update: update
+    },
+    input: {
+        activePointers: 3,
+        target: null
     }
 };
 
@@ -1022,20 +1028,29 @@ function startGame() {
 
     gameStarted = true;
 
-    // Request fullscreen
-    const elem = document.documentElement;
-    if (elem.requestFullscreen) {
-        elem.requestFullscreen();
-    } else if (elem.webkitRequestFullscreen) {
-        elem.webkitRequestFullscreen();
-    } else if (elem.msRequestFullscreen) {
-        elem.msRequestFullscreen();
+    // Request fullscreen (skip on iOS as it doesn't support fullscreen API)
+    if (!isIOS()) {
+        const elem = document.documentElement;
+        if (elem.requestFullscreen) {
+            elem.requestFullscreen().catch(err => console.log('Fullscreen failed:', err));
+        } else if (elem.webkitRequestFullscreen) {
+            elem.webkitRequestFullscreen();
+        } else if (elem.msRequestFullscreen) {
+            elem.msRequestFullscreen();
+        }
     }
 
     // Hide start screen and show game
     document.getElementById('start-screen').style.display = 'none';
     document.getElementById('game-container').style.display = 'block';
     document.body.style.display = 'flex';
+
+    // Prevent touch scrolling on mobile
+    document.addEventListener('touchmove', function(e) {
+        if (e.target.closest('#phaser-game')) {
+            e.preventDefault();
+        }
+    }, { passive: false });
 
     // Start background music with song0
     if (!isMuted && bgMusic0) {
@@ -1047,3 +1062,28 @@ function startGame() {
         game.canvas.focus();
     }
 }
+
+// Helper function to detect iOS
+function isIOS() {
+    return /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+}
+
+// Handle orientation changes
+function checkOrientation() {
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    const isPortrait = window.innerHeight > window.innerWidth;
+    const orientationMessage = document.getElementById('orientation-message');
+    
+    if (isMobile && isPortrait && gameStarted) {
+        orientationMessage.style.display = 'flex';
+    } else {
+        orientationMessage.style.display = 'none';
+    }
+}
+
+// Add orientation change listener
+window.addEventListener('orientationchange', checkOrientation);
+window.addEventListener('resize', checkOrientation);
+
+// Check orientation on load
+document.addEventListener('DOMContentLoaded', checkOrientation);
