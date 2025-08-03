@@ -261,6 +261,10 @@ const config = {
     input: {
         activePointers: 3,
         target: null
+    },
+    audio: {
+        disableWebAudio: false,
+        noAudio: false
     }
 };
 
@@ -291,6 +295,9 @@ let currentBgMusic = 0;
 let isMuted = false;
 let gameStarted = false;
 let bgMusicArray = [];
+
+// Initialize audio context variable
+let audioContext = null;
 
 // Initialize the game
 const game = new Phaser.Game(config);
@@ -372,7 +379,13 @@ function create() {
     guideText.setOrigin(0.5);
 
     // Set up input handlers
-    this.input.on('pointerdown', startDrawing, this);
+    this.input.on('pointerdown', (pointer) => {
+        // Ensure audio is unlocked on first interaction
+        if (this.sound.context && this.sound.context.state === 'suspended') {
+            this.sound.context.resume();
+        }
+        startDrawing(pointer);
+    }, this);
     this.input.on('pointermove', draw, this);
     this.input.on('pointerup', stopDrawing, this);
 
@@ -512,6 +525,11 @@ function stopDrawing() {
 }
 
 function clearDrawing() {
+    // Ensure audio context is active
+    if (game && game.sound && game.sound.context && game.sound.context.state === 'suspended') {
+        game.sound.context.resume();
+    }
+    
     graphics.clear();
     drawnPath = [];
     allStrokes = [];
@@ -609,7 +627,14 @@ function checkDrawing() {
 
             // Play success sound
             if (!isMuted) {
-                successSound.play();
+                // Ensure audio context is resumed before playing
+                if (game.sound.context && game.sound.context.state === 'suspended') {
+                    game.sound.context.resume().then(() => {
+                        successSound.play();
+                    });
+                } else {
+                    successSound.play();
+                }
             }
 
             // Show congratulations animation
@@ -987,6 +1012,9 @@ function playNextSong() {
 }
 
 function toggleMute() {
+    // Ensure audio context is initialized
+    initAudioContext();
+    
     isMuted = !isMuted;
     const muteBtn = document.getElementById('mute-btn');
 
@@ -1008,6 +1036,9 @@ function toggleMute() {
 }
 
 function switchMusic() {
+    // Ensure audio context is initialized
+    initAudioContext();
+    
     if (isMuted) return; // Don't switch if muted
 
     // Stop current song
@@ -1027,6 +1058,20 @@ function startGame() {
     if (gameStarted) return;
 
     gameStarted = true;
+
+    // Initialize audio context on user interaction (required for mobile)
+    initAudioContext();
+    
+    // Ensure Phaser's audio context is also resumed
+    if (game && game.sound && game.sound.context) {
+        if (game.sound.context.state === 'suspended') {
+            game.sound.context.resume().then(() => {
+                console.log('Phaser audio context resumed');
+            }).catch(e => {
+                console.log('Phaser audio resume failed:', e);
+            });
+        }
+    }
 
     // Request fullscreen (skip on iOS as it doesn't support fullscreen API)
     if (!isIOS()) {
@@ -1087,3 +1132,36 @@ window.addEventListener('resize', checkOrientation);
 
 // Check orientation on load
 document.addEventListener('DOMContentLoaded', checkOrientation);
+
+// Initialize Web Audio Context for iOS
+function initAudioContext() {
+    if (!audioContext) {
+        try {
+            // Create AudioContext only after user gesture
+            const AudioContext = window.AudioContext || window['webkitAudioContext'];
+            audioContext = new AudioContext();
+            
+            // For iOS, we need to play a silent buffer to unlock audio
+            if (isIOS()) {
+                const buffer = audioContext.createBuffer(1, 1, 22050);
+                const source = audioContext.createBufferSource();
+                source.buffer = buffer;
+                source.connect(audioContext.destination);
+                source.start(0);
+            }
+        } catch (e) {
+            console.log('AudioContext creation failed:', e);
+        }
+    }
+    
+    // Always try to resume if suspended
+    if (audioContext && audioContext.state === 'suspended') {
+        audioContext.resume().then(() => {
+            console.log('AudioContext resumed successfully');
+        }).catch(e => {
+            console.log('AudioContext resume failed:', e);
+        });
+    }
+    
+    return audioContext;
+}
